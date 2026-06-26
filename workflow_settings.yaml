@@ -1,0 +1,4 @@
+defaultProject: time-dotcom-taxi-500404
+defaultDataset: chicago_taxi_analytics
+defaultAssertionDataset: dataform_assertions
+dataformCoreVersion: 3.0.52

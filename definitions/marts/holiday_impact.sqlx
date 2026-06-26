@@ -1,0 +1,81 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Impact of major US federal holidays on Chicago taxi trip demand, analyzed across 2018 and 2019 (pre-COVID years for stable comparison). Each holiday's trip count is compared against the average daily trip count of the surrounding 14 days (7 before, 7 after) to compute percentage change from baseline."
+}
+
+WITH holidays AS (
+  -- Major US federal holidays for 2018 and 2019
+  SELECT * FROM UNNEST([
+    STRUCT(DATE '2018-01-01' AS holiday_date, "New Year's Day" AS holiday_name),
+    STRUCT(DATE '2018-01-15', "MLK Day"),
+    STRUCT(DATE '2018-05-28', "Memorial Day"),
+    STRUCT(DATE '2018-07-04', "Independence Day"),
+    STRUCT(DATE '2018-09-03', "Labor Day"),
+    STRUCT(DATE '2018-11-22', "Thanksgiving"),
+    STRUCT(DATE '2018-12-25', "Christmas Day"),
+    STRUCT(DATE '2019-01-01', "New Year's Day"),
+    STRUCT(DATE '2019-01-21', "MLK Day"),
+    STRUCT(DATE '2019-05-27', "Memorial Day"),
+    STRUCT(DATE '2019-07-04', "Independence Day"),
+    STRUCT(DATE '2019-09-02', "Labor Day"),
+    STRUCT(DATE '2019-11-28', "Thanksgiving"),
+    STRUCT(DATE '2019-12-25', "Christmas Day")
+  ])
+),
+
+daily_trips AS (
+  -- Aggregate trips by date for the analysis period
+  SELECT
+    DATE(trip_start_timestamp) AS trip_date,
+    COUNT(*) AS trip_count
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2017-12-15' AND '2020-01-15'
+  GROUP BY trip_date
+),
+
+daily_trips_with_holiday_flag AS (
+  -- Mark each day as either a holiday or not, so we can exclude holidays from the baseline
+  SELECT
+    dt.trip_date,
+    dt.trip_count,
+    h.holiday_date IS NOT NULL AS is_holiday
+  FROM daily_trips dt
+  LEFT JOIN holidays h
+    ON dt.trip_date = h.holiday_date
+),
+
+holiday_with_baseline AS (
+  -- For each holiday, join the 14 surrounding non-holiday days and compute the baseline average
+  SELECT
+    h.holiday_date,
+    h.holiday_name,
+    EXTRACT(YEAR FROM h.holiday_date) AS year,
+    holiday_day.trip_count AS holiday_trip_count,
+    AVG(baseline_day.trip_count) AS baseline_avg_trips
+  FROM holidays h
+  LEFT JOIN daily_trips_with_holiday_flag holiday_day
+    ON holiday_day.trip_date = h.holiday_date
+  LEFT JOIN daily_trips_with_holiday_flag baseline_day
+    ON baseline_day.trip_date BETWEEN DATE_SUB(h.holiday_date, INTERVAL 7 DAY)
+                                  AND DATE_ADD(h.holiday_date, INTERVAL 7 DAY)
+    AND baseline_day.trip_date != h.holiday_date
+    AND baseline_day.is_holiday = FALSE
+  GROUP BY h.holiday_date, h.holiday_name, holiday_day.trip_count
+)
+
+SELECT
+  holiday_date,
+  holiday_name,
+  year,
+  holiday_trip_count,
+  ROUND(baseline_avg_trips, 0) AS baseline_avg_trips,
+  ROUND(holiday_trip_count - baseline_avg_trips, 0) AS trip_count_diff,
+  ROUND((holiday_trip_count - baseline_avg_trips) / baseline_avg_trips * 100, 1) AS pct_change_from_baseline,
+  CASE
+    WHEN holiday_trip_count > baseline_avg_trips THEN 'Increase'
+    WHEN holiday_trip_count < baseline_avg_trips THEN 'Decrease'
+    ELSE 'No change'
+  END AS impact_direction
+FROM holiday_with_baseline
+ORDER BY holiday_date

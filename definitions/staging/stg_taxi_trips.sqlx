@@ -1,0 +1,31 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Cleaned taxi trips: filters invalid fares, distances, and durations. Adds payment, company, and location fields needed for tip earner, overworker, holiday, and bonus insight analyses."
+}
+
+SELECT
+  unique_key,
+  taxi_id,
+  trip_start_timestamp,
+  trip_end_timestamp,
+  trip_seconds,
+  trip_miles,
+  fare,
+  tips,
+  tolls,
+  extras,
+  trip_total,
+  payment_type,
+  company,
+  pickup_community_area,
+  dropoff_community_area,
+  pickup_latitude,
+  pickup_longitude,
+  dropoff_latitude,
+  dropoff_longitude
+FROM ${ref("taxi_trips")}
+WHERE fare > 0
+  AND trip_miles > 0
+  AND trip_seconds > 0
+  AND taxi_id IS NOT NULL

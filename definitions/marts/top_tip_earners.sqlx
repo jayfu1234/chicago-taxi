@@ -1,0 +1,31 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Top 100 taxis ranked by total recorded tips earned during Oct 1 to Dec 31, 2023. Minimum 30 trips required to qualify. Tip rankings reflect recorded (mostly card-based) tips per Chicago Taxi Trips data limitations on cash tip capture."
+}
+
+WITH tips_per_taxi AS (
+  SELECT
+    taxi_id,
+    COUNT(*) AS trip_count,
+    ROUND(SUM(tips), 2) AS total_tips,
+    ROUND(AVG(tips), 2) AS avg_tip_per_trip,
+    ROUND(SUM(trip_total), 2) AS total_earnings,
+    ROUND(SUM(tips) / NULLIF(SUM(fare), 0) * 100, 2) AS tip_rate_pct
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+  GROUP BY taxi_id
+  HAVING COUNT(*) >= 30
+)
+
+SELECT
+  RANK() OVER (ORDER BY total_tips DESC) AS rank,
+  taxi_id,
+  trip_count,
+  total_tips,
+  avg_tip_per_trip,
+  total_earnings,
+  tip_rate_pct
+FROM tips_per_taxi
+QUALIFY rank <= 100
+ORDER BY rank

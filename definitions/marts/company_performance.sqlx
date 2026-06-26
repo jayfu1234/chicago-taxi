@@ -1,0 +1,39 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Company level performance comparison for Oct 1 to Dec 31, 2023. Surfaces market concentration and per-trip economics across Chicago taxi operators. Minimum 1,000 trips required to qualify, ensuring statistical reliability."
+}
+
+WITH company_aggregates AS (
+  SELECT
+    company,
+    COUNT(DISTINCT taxi_id) AS active_taxis,
+    COUNT(*) AS trip_count,
+    ROUND(SUM(trip_total), 2) AS total_revenue,
+    ROUND(AVG(fare), 2) AS avg_fare,
+    ROUND(AVG(tips), 2) AS avg_tip,
+    ROUND(AVG(trip_total), 2) AS avg_trip_total,
+    ROUND(SUM(tips) / NULLIF(SUM(fare), 0) * 100, 2) AS tip_rate_pct,
+    ROUND(AVG(trip_miles), 2) AS avg_trip_miles
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+    AND company IS NOT NULL
+  GROUP BY company
+  HAVING COUNT(*) >= 1000
+)
+
+SELECT
+  RANK() OVER (ORDER BY trip_count DESC) AS volume_rank,
+  RANK() OVER (ORDER BY avg_tip DESC) AS tip_rank,
+  company,
+  active_taxis,
+  trip_count,
+  total_revenue,
+  avg_fare,
+  avg_tip,
+  avg_trip_total,
+  tip_rate_pct,
+  avg_trip_miles,
+  ROUND(trip_count / SUM(trip_count) OVER () * 100, 2) AS market_share_pct
+FROM company_aggregates
+ORDER BY trip_count DESC

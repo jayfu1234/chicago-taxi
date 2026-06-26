@@ -1,0 +1,93 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Top 100 taxis ranked by maximum continuous shift driving hours during Oct 1 to Dec 31, 2023. Shifts are reconstructed by treating gaps of 8+ hours between trips as shift boundaries, with gaps over 48 hours treated as periods of inactivity. Trip durations are capped at 4 hours each to exclude data outliers."
+}
+
+WITH trips_with_gaps AS (
+  -- Step 1: for each trip, calculate the gap from the previous trip
+  SELECT
+    taxi_id,
+    trip_start_timestamp,
+    trip_end_timestamp,
+    LEAST(trip_seconds, 14400) AS capped_trip_seconds,
+    TIMESTAMP_DIFF(
+      trip_start_timestamp,
+      LAG(trip_end_timestamp) OVER (PARTITION BY taxi_id ORDER BY trip_start_timestamp),
+      HOUR
+    ) AS hours_since_last_trip
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+),
+
+shift_starts AS (
+  -- Step 2: flag each trip as the start of a new shift (1) or continuation (0)
+  -- A new shift starts when:
+  --   - it's the taxi's first trip in the window (hours_since_last_trip IS NULL)
+  --   - the gap was 8+ hours (driver took a real break)
+  --   - the gap was over 48 hours (long inactivity, restart)
+  SELECT
+    *,
+    CASE
+      WHEN hours_since_last_trip IS NULL THEN 1
+      WHEN hours_since_last_trip >= 8 THEN 1
+      ELSE 0
+    END AS is_new_shift,
+    CASE
+      WHEN hours_since_last_trip > 48 THEN 1
+      ELSE 0
+    END AS is_inactivity_gap
+  FROM trips_with_gaps
+),
+
+shift_ids AS (
+  -- Step 3: assign a unique shift_id per taxi by running-summing the new shift flags
+  SELECT
+    *,
+    SUM(is_new_shift) OVER (
+      PARTITION BY taxi_id
+      ORDER BY trip_start_timestamp
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS shift_id
+  FROM shift_starts
+  WHERE is_inactivity_gap = 0  -- exclude inactivity gap transitions from shift logic
+),
+
+shifts AS (
+  -- Step 4: aggregate trips within each shift
+  SELECT
+    taxi_id,
+    shift_id,
+    MIN(trip_start_timestamp) AS shift_start,
+    MAX(trip_end_timestamp) AS shift_end,
+    COUNT(*) AS trips_in_shift,
+    ROUND(SUM(capped_trip_seconds) / 3600, 2) AS shift_driving_hours
+  FROM shift_ids
+  GROUP BY taxi_id, shift_id
+),
+
+taxi_shift_summary AS (
+  -- Step 5: per taxi, aggregate across all their shifts
+  SELECT
+    taxi_id,
+    COUNT(*) AS total_shifts,
+    ROUND(MAX(shift_driving_hours), 2) AS max_shift_hours,
+    ROUND(AVG(shift_driving_hours), 2) AS avg_shift_hours,
+    ROUND(SUM(shift_driving_hours), 2) AS total_driving_hours,
+    SUM(trips_in_shift) AS total_trips
+  FROM shifts
+  GROUP BY taxi_id
+  HAVING COUNT(*) >= 5  -- minimum 5 shifts in the window to qualify, filters out one-off taxis
+)
+
+SELECT
+  RANK() OVER (ORDER BY max_shift_hours DESC) AS rank,
+  taxi_id,
+  max_shift_hours,
+  avg_shift_hours,
+  total_shifts,
+  total_trips,
+  total_driving_hours
+FROM taxi_shift_summary
+QUALIFY rank <= 100
+ORDER BY rank

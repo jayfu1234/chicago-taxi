@@ -1,0 +1,38 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Hourly demand pattern across the day for Oct 1 to Dec 31, 2023. Shows trip volume, average fare, average tips, and average trip duration by hour of day to inform fleet allocation, dynamic pricing, and driver shift planning."
+}
+
+WITH hourly_aggregates AS (
+  SELECT
+    EXTRACT(HOUR FROM trip_start_timestamp) AS hour_of_day,
+    COUNT(*) AS trip_count,
+    ROUND(AVG(fare), 2) AS avg_fare,
+    ROUND(AVG(tips), 2) AS avg_tip,
+    ROUND(AVG(trip_total), 2) AS avg_trip_total,
+    ROUND(AVG(trip_seconds) / 60, 2) AS avg_trip_minutes,
+    ROUND(AVG(trip_miles), 2) AS avg_trip_miles
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+  GROUP BY hour_of_day
+)
+
+SELECT
+  hour_of_day,
+  trip_count,
+  avg_fare,
+  avg_tip,
+  avg_trip_total,
+  avg_trip_minutes,
+  avg_trip_miles,
+  ROUND(trip_count / SUM(trip_count) OVER () * 100, 2) AS pct_of_daily_trips,
+  CASE
+    WHEN hour_of_day BETWEEN 7 AND 9 THEN 'Morning Rush'
+    WHEN hour_of_day BETWEEN 10 AND 15 THEN 'Midday'
+    WHEN hour_of_day BETWEEN 16 AND 19 THEN 'Evening Rush'
+    WHEN hour_of_day BETWEEN 20 AND 23 THEN 'Late Evening'
+    ELSE 'Overnight'
+  END AS time_period
+FROM hourly_aggregates
+ORDER BY hour_of_day

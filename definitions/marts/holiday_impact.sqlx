@@ -30,7 +30,7 @@ daily_trips AS (
     DATE(trip_start_timestamp) AS trip_date,
     COUNT(*) AS trip_count
   FROM ${ref("stg_taxi_trips")}
-  WHERE DATE(trip_start_timestamp) BETWEEN '2017-12-15' AND '2020-01-15'
+  WHERE DATE(trip_start_timestamp) BETWEEN '2017-12-26' AND '2019-12-31'
   GROUP BY trip_date
 ),
 
@@ -55,12 +55,12 @@ holiday_with_baseline AS (
     AVG(baseline_day.trip_count) AS baseline_avg_trips
   FROM holidays h
   LEFT JOIN daily_trips_with_holiday_flag holiday_day
-    ON holiday_day.trip_date = h.holiday_date
+    ON holiday_day.trip_date = h.holiday_date -- get trip count of holiday days
   LEFT JOIN daily_trips_with_holiday_flag baseline_day
     ON baseline_day.trip_date BETWEEN DATE_SUB(h.holiday_date, INTERVAL 7 DAY)
                                   AND DATE_ADD(h.holiday_date, INTERVAL 7 DAY)
-    AND baseline_day.trip_date != h.holiday_date
-    AND baseline_day.is_holiday = FALSE
+    AND baseline_day.trip_date != h.holiday_date --exclude holiday own date
+    AND baseline_day.is_holiday = FALSE -- exclude other holiday 
   GROUP BY h.holiday_date, h.holiday_name, holiday_day.trip_count
 )
 

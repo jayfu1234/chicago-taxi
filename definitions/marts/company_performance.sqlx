@@ -1,7 +1,7 @@
 config {
   type: "table",
   schema: "chicago_taxi_analytics",
-  description: "Company level performance comparison for Oct 1 to Dec 31, 2023. Surfaces market concentration and per-trip economics across Chicago taxi operators. Minimum 1,000 trips required to qualify, ensuring statistical reliability."
+  description: "Company level performance comparison for Oct 1 to Dec 31, 2023. Surfaces market concentration, per-trip economics, fleet utilization, pricing efficiency, and payment mix across Chicago taxi operators. Minimum 1,000 trips required to qualify, ensuring statistical reliability."
 }
 
 WITH company_aggregates AS (
@@ -14,7 +14,11 @@ WITH company_aggregates AS (
     ROUND(AVG(tips), 2) AS avg_tip,
     ROUND(AVG(trip_total), 2) AS avg_trip_total,
     ROUND(SUM(tips) / NULLIF(SUM(fare), 0) * 100, 2) AS tip_rate_pct,
-    ROUND(AVG(trip_miles), 2) AS avg_trip_miles
+    ROUND(AVG(trip_miles), 2) AS avg_trip_miles,
+    ROUND(SUM(fare) / NULLIF(SUM(trip_miles), 0), 2) AS fare_per_mile,
+    ROUND(SUM(trip_total) / NULLIF(COUNT(DISTINCT taxi_id), 0), 2) AS revenue_per_taxi,
+    ROUND(COUNTIF(payment_type = 'Credit Card') / COUNT(*) * 100, 2) AS pct_card_trips,
+    ROUND(COUNTIF(payment_type = 'Cash') / COUNT(*) * 100, 2) AS pct_cash_trips
   FROM ${ref("stg_taxi_trips")}
   WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
     AND company IS NOT NULL
@@ -34,6 +38,10 @@ SELECT
   avg_trip_total,
   tip_rate_pct,
   avg_trip_miles,
+  fare_per_mile,
+  revenue_per_taxi,
+  pct_card_trips,
+  pct_cash_trips,
   ROUND(trip_count / SUM(trip_count) OVER () * 100, 2) AS market_share_pct
 FROM company_aggregates
 ORDER BY trip_count DESC

@@ -26,7 +26,7 @@ SELECT
   avg_trip_total,
   avg_trip_minutes,
   avg_trip_miles,
-  ROUND(trip_count / SUM(trip_count) OVER () * 100, 2) AS pct_of_daily_trips,
+  ROUND(trip_count / SUM(trip_count) OVER () * 100, 2) AS pct_of_total_trips,
   CASE
     WHEN hour_of_day BETWEEN 7 AND 9 THEN 'Morning Rush'
     WHEN hour_of_day BETWEEN 10 AND 15 THEN 'Midday'

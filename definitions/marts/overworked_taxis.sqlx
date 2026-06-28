@@ -44,11 +44,7 @@ shift_ids AS (
   -- Step 3: assign a unique shift_id per taxi by running-summing the new shift flags
   SELECT
     *,
-    SUM(is_new_shift) OVER (
-      PARTITION BY taxi_id
-      ORDER BY trip_start_timestamp
-      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) AS shift_id
+    SUM(is_new_shift) OVER (PARTITION BY taxi_id ORDER BY trip_start_timestamp) AS shift_id
   FROM shift_starts
   WHERE is_inactivity_gap = 0  -- exclude inactivity gap transitions from shift logic
 ),

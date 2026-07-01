@@ -29,8 +29,8 @@ definitions/
     overworked\_taxis.sqlx         \-- Question 2  
     holiday\_impact.sqlx           \-- Question 3  
     hourly\_demand\_pattern.sqlx    \-- Bonus Insight 1  
-    company\_performance.sqlx      \-- Bonus Insight 2
-    geo_demand_by_area.sqlx       \-- Bonus Insight 3
+    company\_performance.sqlx      \-- Bonus Insight 2  
+    geo\_demand\_by\_area.sqlx       \-- Bonus Insight 3 
 
 ## Staging Layer: Cleaning Rules
 

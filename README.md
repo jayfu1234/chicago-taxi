@@ -15,6 +15,7 @@ GCP Project: time-dotcom-taxi-500404
 Dataform Repository: chicago-taxi-pipeline   
 Output Dataset: chicago\_taxi\_analytics  
 Source table: bigquery-public-data.chicago\_taxi\_trips.taxi\_trips
+Dashboard: https://datastudio.google.com/reporting/ae6af534-8f74-4a62-90a3-89281217519f
 
 ## Pipeline Structure
 
@@ -29,6 +30,7 @@ definitions/
     holiday\_impact.sqlx           \-- Question 3  
     hourly\_demand\_pattern.sqlx    \-- Bonus Insight 1  
     company\_performance.sqlx      \-- Bonus Insight 2
+    geo_demand_by_area.sqlx       -- Bonus Insight 3
 
 ## Staging Layer: Cleaning Rules
 
@@ -98,6 +100,8 @@ The current column list covers identifiers, timestamps, duration, distance, all 
 
 **Bonus Insight 2: Company Performance Comparison** Volume, market share, fleet size, and per-trip economics for the 22 taxi companies operating with at least 1,000 trips in Oct to Dec 2023\.
 
+**Bonus Insight 3: Geographic Demand Analysis** Trip pickups, dropoffs, and net flow aggregated by Chicago community area for Oct to Dec 2023. Census tracts were evaluated but excluded due to 55% suppressed. Lat/lng and community area fields with 97% coverage are used instead. Key findings: O'Hare (area 76) is the highest-volume pickup zone at 22.9% of all pickups with a net source of 247,700 trips, confirming taxis function primarily as airport-exit vehicles. Midway Airport (area 56) shows the same pattern. Near North Side (area 8) is the largest net dropoff destination.
+
 ## Known Limitations
 
 - Cash tips are not reliably recorded, so tip based rankings undercount true gratuity for cash paying riders.  
@@ -107,8 +111,6 @@ The current column list covers identifiers, timestamps, duration, distance, all 
 - The Question 2 overworked taxis ranking is reported at the taxi\_id (medallion) level, not the driver level, since drivers cannot be uniquely identified in this dataset. Top results may show implausibly long single shifts (the top result shows 322 hours, the second 217 hours) because shared medallions often have driver handoffs in under our 8 hour gap threshold, causing multiple drivers' shifts to be merged into one. The bulk of the top 100 (ranks 10 through 100, ranging from approximately 19 to 50 max shift hours) represents a more realistic "heavy usage" profile. The supporting columns avg\_shift\_hours and total\_shifts help distinguish patterns where a medallion's heavy usage comes from one consistently overworked driver versus multiple drivers sharing the same vehicle.
 
 ## Future Work
-
-- With more time, pickup and dropoff latitude/longitude fields could power a geographic map visualization in Looker Studio (heat map of demand by location, or origin/destination flow), which would add a spatial dimension the current dashboard does not cover.  
     
 - A trips per taxi metric (fleet utilization) would complement the revenue per taxi and fare per mile metrics already added, distinguishing high-volume fleets from high-efficiency ones more precisely.  
     

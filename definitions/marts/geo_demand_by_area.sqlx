@@ -1,0 +1,63 @@
+config {
+  type: "table",
+  schema: "chicago_taxi_analytics",
+  description: "Trip demand and economics aggregated by Chicago community area for Oct 1 to Dec 31, 2023. Includes representative lat/lng coordinates for each community area for use in Looker Studio geo/bubble map visualization. Pickup coverage is 97%, dropoff coverage is 91%. Census tracts were evaluated but excluded due to 55% suppressed; lat/lng already falls back to community area center when census tract is hidden."
+}
+
+WITH pickup_stats AS (
+  SELECT
+    pickup_community_area AS community_area,
+    -- Since lat/lng resolves to the community area center anyway,
+    -- AVG across trips gives a stable representative coordinate per area
+    ROUND(AVG(pickup_latitude), 6) AS area_latitude,
+    ROUND(AVG(pickup_longitude), 6) AS area_longitude,
+    COUNT(*) AS pickup_trip_count,
+    ROUND(AVG(fare), 2) AS avg_pickup_fare,
+    ROUND(AVG(tips), 2) AS avg_pickup_tip,
+    ROUND(AVG(trip_miles), 2) AS avg_pickup_trip_miles,
+    ROUND(AVG(trip_total), 2) AS avg_pickup_trip_total,
+    ROUND(AVG(trip_seconds) / 60, 2) AS avg_pickup_trip_minutes
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+    AND pickup_community_area IS NOT NULL
+    AND pickup_latitude IS NOT NULL
+    AND pickup_longitude IS NOT NULL
+  GROUP BY pickup_community_area
+),
+
+dropoff_stats AS (
+  SELECT
+    dropoff_community_area AS community_area,
+    COUNT(*) AS dropoff_trip_count
+  FROM ${ref("stg_taxi_trips")}
+  WHERE DATE(trip_start_timestamp) BETWEEN '2023-10-01' AND '2023-12-31'
+    AND dropoff_community_area IS NOT NULL
+  GROUP BY dropoff_community_area
+)
+
+SELECT
+  p.community_area,
+  p.area_latitude,
+  p.area_longitude,
+  p.pickup_trip_count,
+  COALESCE(d.dropoff_trip_count, 0) AS dropoff_trip_count,
+  -- Net flow: positive means more pickups than dropoffs
+  -- negative means more dropoffs than pickups
+  p.pickup_trip_count - COALESCE(d.dropoff_trip_count, 0) AS net_flow,
+  CASE
+    WHEN p.pickup_trip_count > COALESCE(d.dropoff_trip_count, 0)
+      THEN 'Net Source'
+    WHEN p.pickup_trip_count < COALESCE(d.dropoff_trip_count, 0)
+      THEN 'Net Sink'
+    ELSE 'Balanced'
+  END AS flow_direction,
+  p.avg_pickup_fare,
+  p.avg_pickup_tip,
+  p.avg_pickup_trip_miles,
+  p.avg_pickup_trip_total,
+  p.avg_pickup_trip_minutes,
+  ROUND(p.pickup_trip_count / SUM(p.pickup_trip_count) OVER () * 100, 2) AS pct_of_total_pickups
+FROM pickup_stats p
+LEFT JOIN dropoff_stats d
+  ON p.community_area = d.community_area
+ORDER BY pickup_trip_count DESC

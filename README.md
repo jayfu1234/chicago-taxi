@@ -30,7 +30,7 @@ definitions/
     holiday\_impact.sqlx           \-- Question 3  
     hourly\_demand\_pattern.sqlx    \-- Bonus Insight 1  
     company\_performance.sqlx      \-- Bonus Insight 2
-    geo_demand_by_area.sqlx       -- Bonus Insight 3
+    geo_demand_by_area.sqlx       \-- Bonus Insight 3
 
 ## Staging Layer: Cleaning Rules
 
